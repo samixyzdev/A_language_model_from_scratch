@@ -129,13 +129,13 @@ def parallel_pretokenize(input_path: str, special_tokens: List[str], num_process
     total_frequency = Counter();
     for chunk_result in chunk_results:
         total_frequency.update(chunk_result)
-    return total_frequency
+    return total_frequency 
     
 def count_pairs(byte_tokens_frequency: Dict[Tuple, int]) -> Counter:
     pair_counts = Counter()
     for byte_tokens, frequency in byte_tokens_frequency.items():
         for i in range(len(byte_tokens) - 1):
-            pair = (byte_tokens[i], byte_tokens[i+1])
+            pair = (byte_tokens[i], byte_tokens[i+1])   
             pair_counts[pair] += frequency
     return pair_counts
 
@@ -144,6 +144,35 @@ def find_best_pair(pairs: Counter) -> Tuple[int, int]:
         return None
     best_pair = max(pairs, key = lambda p: (pairs[p], -p[0], -p[1]))
     return best_pair
+
+def _apply_merge(byte_tokens_frequency: Dict[tuple, int], merge_pair: Tuple[int, int], new_token_id: int) -> Dict[tuple, int]:
+    """
+    REASONING: After selecting a merge, we must update ALL words to reflect this merge.
+    This changes the representation of words and affects future pair counts.
+    """
+    new_byte_tokens_frequency = {}
+    # TODO: For each word, apply the merge and update the dictionary
+    return new_byte_tokens_frequency
+
+def _merge_word(token_bytes: tuple, merge_pair: Tuple[int, int], new_token_id: int) -> List[int]:
+    """
+    REASONING: Apply a single merge operation to one word. We scan left-to-right
+    and replace first occurrence of the pair with the new token ID.
+    """
+    # Scan through word_bytes, find merge_pair, replace with new_token_id
+    merged_word = []
+    found = 0
+    for i in range(len(token_bytes) - 1):
+        if token_bytes[i] == merge_pair[0] and token_bytes[i+1] == merge_pair[1]:
+            merged_word.append(new_token_id)
+            found = i
+            break
+        else:
+            merged_word.append(token_bytes[i])
+    for j in range(found, len(token_bytes)):
+        merged_word.append(token_bytes[j])
+    return merged_word
+
 # REASONING:
 # _find_best_pair function aims to select the most frequent byte pair for merging.
 #
@@ -184,12 +213,25 @@ def train_bpe(
     vocab = {}
     for i in range(256):
         vocab[i] = bytes([i])
+    next_id = 256
     for i in range(len(special_tokens)):
-        vocab[256 + i] = special_tokens[i]
+        vocab[next_id] = special_tokens[i]
+        next_id += 1
     tokens_frequency = parallel_pretokenize(input_path, special_tokens)
     byte_tokens_frequency = {}
     for token_str, token_fq in tokens_frequency.items():
-        byte_tokens_frequency[tuple(token_str.encode())] = token_fq
+        byte_tokens_frequency[Tuple(token_str.encode())] = token_fq  # changes to int
+    target_merge = vocab_size - len(vocab)
+    merge = []
+    for i in range(target_merge):
+        pair_counts = count_pairs(byte_tokens_frequency)
+        if not pair_counts:
+            break
+        best_pair = find_best_pair(pair_counts)
+        merge.append((bytes([best_pair[0]]), bytes([best_pair[1]])))
+        vocab[next_id] = vocab[best_pair[0]] + vocab[best_pair[1]]
+        next_id += 1
+
 
     """
     tuple(word_str.encode("utf-8")) will turn str into a tuple of bytes in utf-8 
