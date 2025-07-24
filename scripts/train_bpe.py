@@ -1,5 +1,5 @@
 import os
-import re
+import regex as re
 from collections import defaultdict, Counter
 from typing import List, Dict, Tuple, BinaryIO
 from multiprocessing import Pool, cpu_count
@@ -139,6 +139,11 @@ def count_pairs(byte_tokens_frequency: Dict[Tuple, int]) -> Counter:
             pair_counts[pair] += frequency
     return pair_counts
 
+def find_best_pair(pairs: Counter) -> Tuple[int, int]:
+    if not pairs:
+        return None
+    best_pair = max(pairs, key = lambda p: (pairs[p], -p[0], -p[1]))
+    return best_pair
 # REASONING:
 # _find_best_pair function aims to select the most frequent byte pair for merging.
 #
