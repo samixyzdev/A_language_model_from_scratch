@@ -4,6 +4,7 @@ from collections import defaultdict, Counter
 from typing import List, Dict, Tuple, BinaryIO
 from multiprocessing import Pool, cpu_count
 from typing import BinaryIO
+import pickle
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
@@ -65,7 +66,7 @@ Problem encountered, not sure if there are multiple special tokens , and the cur
 problem resolved: only one special token exist
 """
 
-def process_chunk(args: Tuple[str, int, int, List[str]]) -> Counter: # path, start_pos, end_pos, special_token
+def _process_chunk(args: Tuple[str, int, int, List[str]]) -> Counter: # path, start_pos, end_pos, special_token
 
     filepath, start_pos, end_pos, special_tokens = args
     
@@ -114,7 +115,7 @@ def process_chunk(args: Tuple[str, int, int, List[str]]) -> Counter: # path, sta
     return total_token_frequency
             
 
-def parallel_pretokenize(input_path: str, special_tokens: List[str], num_process: int = None) -> Counter:
+def _parallel_pretokenize(input_path: str, special_tokens: List[str], num_process: int = None) -> Counter:
     if num_process == None:
         num_process = cpu_count()
     with open(input_path, "rb") as f:
@@ -125,13 +126,13 @@ def parallel_pretokenize(input_path: str, special_tokens: List[str], num_process
         end_pos = boundaries[i+1]
         chunk_args.append((input_path, start_pos, end_pos, special_tokens))
     with Pool(num_process) as pool:
-        chunk_results = pool.map(process_chunk, chunk_args) # a list of count obj
+        chunk_results = pool.map(_process_chunk, chunk_args) # a list of count obj
     total_frequency = Counter();
     for chunk_result in chunk_results:
         total_frequency.update(chunk_result)
     return total_frequency 
     
-def count_pairs(byte_tokens_frequency: Dict[Tuple, int]) -> Counter:
+def _count_pairs(byte_tokens_frequency: Dict[Tuple, int]) -> Counter:
     pair_counts = Counter()
     for byte_tokens, frequency in byte_tokens_frequency.items():
         for i in range(len(byte_tokens) - 1):
@@ -139,7 +140,7 @@ def count_pairs(byte_tokens_frequency: Dict[Tuple, int]) -> Counter:
             pair_counts[pair] += frequency
     return pair_counts
 
-def find_best_pair(pairs: Counter) -> Tuple[int, int]:
+def _find_best_pair(pairs: Counter) -> Tuple[int, int]:
     if not pairs:
         return None
     best_pair = max(pairs, key = lambda p: (pairs[p], -p[0], -p[1]))
@@ -151,7 +152,10 @@ def _apply_merge(byte_tokens_frequency: Dict[tuple, int], merge_pair: Tuple[int,
     This changes the representation of words and affects future pair counts.
     """
     new_byte_tokens_frequency = {}
-    # TODO: For each word, apply the merge and update the dictionary
+    # For each word, apply the merge and update the dictionary
+    for byte_token, frequency in byte_tokens_frequency.items():
+        new_byte_token = _merge_word(byte_token, merge_pair, new_token_id)
+        new_byte_tokens_frequency[new_byte_token] = frequency
     return new_byte_tokens_frequency
 
 def _merge_word(token_bytes: tuple, merge_pair: Tuple[int, int], new_token_id: int) -> List[int]:
@@ -205,7 +209,7 @@ def _merge_word(token_bytes: tuple, merge_pair: Tuple[int, int], new_token_id: i
 # This ensures a deterministic and reproducible selection of the best pair,
 # which is crucial for consistent BPE training results.
 
-def train_bpe(
+def _train_bpe(
         input_path: str,
         vocab_size: int,
         special_tokens: List[str]
@@ -217,23 +221,36 @@ def train_bpe(
     for i in range(len(special_tokens)):
         vocab[next_id] = special_tokens[i]
         next_id += 1
-    tokens_frequency = parallel_pretokenize(input_path, special_tokens)
+    tokens_frequency = _parallel_pretokenize(input_path, special_tokens)
     byte_tokens_frequency = {}
     for token_str, token_fq in tokens_frequency.items():
         byte_tokens_frequency[Tuple(token_str.encode())] = token_fq  # changes to int
     target_merge = vocab_size - len(vocab)
     merge = []
     for i in range(target_merge):
-        pair_counts = count_pairs(byte_tokens_frequency)
+        pair_counts = _count_pairs(byte_tokens_frequency)
         if not pair_counts:
             break
-        best_pair = find_best_pair(pair_counts)
+        best_pair = _find_best_pair(pair_counts)
         merge.append((bytes([best_pair[0]]), bytes([best_pair[1]])))
         vocab[next_id] = vocab[best_pair[0]] + vocab[best_pair[1]]
+        byte_tokens_frequency = _apply_merge(byte_tokens_frequency, best_pair, next_id)
         next_id += 1
-
+    return vocab, merge
 
     """
     tuple(word_str.encode("utf-8")) will turn str into a tuple of bytes in utf-8 
     items() will retuen (key, value) of a dict / Counter
     """
+def _save_bpe_train_result(vocab: Dict[int, bytes], merge: List[Tuple[bytes, bytes]], vocab_path: str, merge_path: str):
+    with open(vocab_path, 'wb') as f:
+        pickle.dump(vocab, f)
+    with open(merge_path, 'wb') as f:
+        pickle.dump(merge, f)
+
+def _load_bpe_train_result(vocab_path:str, merge_path: str) -> Tuple[Dict[int, bytes], List[Tuple[bytes, bytes]]]:
+    with open(vocab_path, 'rb') as f:
+        vocab = pickle.load(f)
+    with open(merge_path, 'rb') as f:
+        merge = pickle.load(f)
+    return vocab,  merge
