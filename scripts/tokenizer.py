@@ -46,29 +46,31 @@ class tokenizer:
             if segment == None:
                 continue
             if segment in self.special_tokens:
-                encoded_text.append(self.vocab_reverse[segment])
+                encoded_text.append(self.vocab_reverse[segment.encode()])
             else:
                 encoded_text.extend(self.encode_word(segment))
         return encoded_text
 
 
     def encode_word(self, word: str) -> List[int]:
-        token = List(word.encode())
+        token = list(word.encode())
         for merge_left, merge_right in self.merge:
             token = self.apply_merge_to_token(token, merge_left, merge_right)
         return token
 
 
     def apply_merge_to_token(self, token: List[int], merge_left: bytes, merge_right: bytes) -> List[int]:
-        if len(token) == 1:
+        if len(token) <= 1:
             return token
         new_token = []
-        for i in range (len(token) - 1):
-            if token[i] == self.vocab_reverse(merge_left) and token[i + 1] == self.vocab_reverse(merge_right):
+        i = 0
+        while i < len(token):
+            if i < len(token) - 1 and token[i] == self.vocab_revers[merge_left] and token[i + 1] == self.vocab_reverse[merge_right]:
                 new_token.append(self.vocab_reverse[merge_left + merge_right])
-                i += 1
+                i += 2
             else:
                 new_token.append(token[i])
+                i += 1
         return new_token
 
     def encode_iterable(self, iterabel: Iterable[str]) -> Iterator[int]:

@@ -224,7 +224,7 @@ def _train_bpe(
     tokens_frequency = _parallel_pretokenize(input_path, special_tokens)
     byte_tokens_frequency = {}
     for token_str, token_fq in tokens_frequency.items():
-        byte_tokens_frequency[Tuple(token_str.encode())] = token_fq  # changes to int
+        byte_tokens_frequency[tuple(token_str.encode())] = token_fq  # changes to int
     target_merge = vocab_size - len(vocab)
     merge = []
     for i in range(target_merge):
