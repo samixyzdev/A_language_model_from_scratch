@@ -1,5 +1,5 @@
 import os
-import regex as re
+import regex as re # type: ignore
 from collections import defaultdict, Counter
 from typing import List, Dict, Tuple, BinaryIO
 from multiprocessing import Pool, cpu_count
@@ -165,11 +165,11 @@ def _merge_word(token_bytes: tuple, merge_pair: Tuple[int, int], new_token_id: i
     """
     # Scan through word_bytes, find merge_pair, replace with new_token_id
     merged_word = []
-    found = 0
+    found = len(token_bytes) - 1
     for i in range(len(token_bytes) - 1):
         if token_bytes[i] == merge_pair[0] and token_bytes[i+1] == merge_pair[1]:
             merged_word.append(new_token_id)
-            found = i
+            found = i + 2
             break
         else:
             merged_word.append(token_bytes[i])
@@ -219,7 +219,7 @@ def _train_bpe(
         vocab[i] = bytes([i])
     next_id = 256
     for i in range(len(special_tokens)):
-        vocab[next_id] = special_tokens[i]
+        vocab[next_id] = special_tokens[i].encode()
         next_id += 1
     tokens_frequency = _parallel_pretokenize(input_path, special_tokens)
     byte_tokens_frequency = {}
