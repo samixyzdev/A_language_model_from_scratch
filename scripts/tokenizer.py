@@ -1,12 +1,17 @@
 from typing import Tuple, Dict, List, Iterable, Iterator
 import regex as re
 import pickle
+PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
 class tokenizer:
     def __init__(self, vocab: Dict[int, bytes], merge: List[Tuple[bytes, bytes]], special_tokens: List[str] = None):
         self.vocab = vocab
         self.merge = merge
-        self.special_tokens = special_tokens
+        self.special_tokens = special_tokens if special_tokens is not None else []
+        escaped_special_tokens = [re.escape(special_token) for special_token in special_tokens]
+        if escaped_special_tokens:
+            special_token_pattern = '|'.join(escaped_special_tokens)
+            self.combined_split_pattern = re.compile(f'({special_token_pattern} | {PAT})')
         self.next_id = len(vocab)
         self.vocab_reverse = {}
         for key, val in self.vocab.items():
@@ -35,7 +40,16 @@ class tokenizer:
     """
     
     def encode(self, text: str) -> List[int]:
-
+        text_segments = re.split(self.combined_split_pattern, text)
+        encoded_text = []
+        for segment in text_segments:
+            if segment == None:
+                continue
+            if segment in self.special_tokens:
+                encoded_text.append(self.vocab_reverse[segment])
+            else:
+                encoded_text.extend(self.encode_word(segment))
+        return encoded_text
 
 
     def encode_word(self, word: str) -> List[int]:
@@ -58,10 +72,15 @@ class tokenizer:
         return new_token
 
     def encode_iterable(self, iterabel: Iterable[str]) -> Iterator[int]:
-        pass
+        for text in iterabel:
+            yield from self.encode(text)
 
     def decode(self, ids: List[int]) -> str:
-        pass
+        ids_to_bytes = []
+        for id in ids:
+            ids_to_bytes.append(self.vocab[id])
+        full_seq = b"".join(ids_to_bytes)
+        return full_seq.decode()
 
             
 
