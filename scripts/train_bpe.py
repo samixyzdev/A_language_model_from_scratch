@@ -71,26 +71,6 @@ def _process_chunk(args: Tuple[str, int, int, List[str]]) -> Counter: # path, st
     filepath, start_pos, end_pos, special_tokens = args
     
     # Read the specific chunk from file (bytes start_pos to end_pos)
-
-    """
-    The f.seek(start_pos) line is absolutely essential. Here's why:
-
-    Unpredictable File Pointer: When you open a file or if previous read/write operations occurred, the file's internal pointer (cursor) might not be at the start_pos you need for the current chunk. f.seek(start_pos) explicitly moves the pointer to that exact byte position.
-
-    Ensuring Correct Chunk Reading: Each parallel process needs to read a specific, unique section of the file defined by its start_pos and end_pos. Without f.seek(), processes might start reading from the beginning of the file, or from where a previous read left off, leading to:
-
-    Duplicate data: Multiple processes reading the same content.
-
-    Missing data: Parts of the file being skipped.
-
-    Incorrect results: Your final aggregated data would be wrong. 
-
-    string.strip([chars])
-
-    string: The string you want to strip.
-
-    [chars]: An optional argument. If provided, it specifies the set of characters to be removed from the beginning and end of the string. If chars is not provided, strip() removes all types of whitespace characters by default.
-    """
     with open(filepath, "rb") as f:
         f.seek(start_pos)
         chunk_bytes = f.read(end_pos - start_pos)
@@ -215,9 +195,10 @@ def _train_bpe(
         vocab[next_id] = special_tokens[i].encode()
         next_id += 1
     tokens_frequency = _parallel_pretokenize(input_path, special_tokens)
-    byte_tokens_frequency = {}
-    for token_str, token_fq in tokens_frequency.items():
-        byte_tokens_frequency[tuple(token_str.encode())] = token_fq  # changes to int
+    byte_tokens_frequency = { 
+        tuple(token_str.encode()): token_fq
+        for token_str, token_fq in tokens_frequency.items()
+    }
     target_merge = vocab_size - len(vocab)
     merge = []
     for i in range(target_merge):
@@ -247,3 +228,23 @@ def _load_bpe_train_result(vocab_path:str, merge_path: str) -> Tuple[Dict[int, b
     with open(merge_path, 'rb') as f:
         merge = pickle.load(f)
     return vocab,  merge
+
+    """
+    The f.seek(start_pos) line is absolutely essential. Here's why:
+
+    Unpredictable File Pointer: When you open a file or if previous read/write operations occurred, the file's internal pointer (cursor) might not be at the start_pos you need for the current chunk. f.seek(start_pos) explicitly moves the pointer to that exact byte position.
+
+    Ensuring Correct Chunk Reading: Each parallel process needs to read a specific, unique section of the file defined by its start_pos and end_pos. Without f.seek(), processes might start reading from the beginning of the file, or from where a previous read left off, leading to:
+
+    Duplicate data: Multiple processes reading the same content.
+
+    Missing data: Parts of the file being skipped.
+
+    Incorrect results: Your final aggregated data would be wrong. 
+
+    string.strip([chars])
+
+    string: The string you want to strip.
+
+    [chars]: An optional argument. If provided, it specifies the set of characters to be removed from the beginning and end of the string. If chars is not provided, strip() removes all types of whitespace characters by default.
+    """
