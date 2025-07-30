@@ -3,7 +3,7 @@ import regex as re
 import pickle
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
-class tokenizer:
+class Tokenizer:
     def __init__(self, vocab: Dict[int, bytes], merge: List[Tuple[bytes, bytes]], special_tokens: List[str] = None):
         self.vocab = vocab
         self.merge = merge
@@ -65,7 +65,7 @@ class tokenizer:
         new_token = []
         i = 0
         while i < len(token):
-            if i < len(token) - 1 and token[i] == self.vocab_revers[merge_left] and token[i + 1] == self.vocab_reverse[merge_right]:
+            if i < len(token) - 1 and token[i] == self.vocab_reverse[merge_left] and token[i + 1] == self.vocab_reverse[merge_right]:
                 new_token.append(self.vocab_reverse[merge_left + merge_right])
                 i += 2
             else:
