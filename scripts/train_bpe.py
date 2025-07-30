@@ -111,31 +111,11 @@ def _parallel_pretokenize(input_path: str, special_tokens: List[str], num_proces
         total_frequency.update(chunk_result)
     return total_frequency 
     
-def _count_pairs(byte_tokens_frequency: Dict[Tuple, int]) -> Counter:
-    pair_counts = Counter()
-    for byte_tokens, frequency in byte_tokens_frequency.items():
-        for i in range(len(byte_tokens) - 1):
-            pair = (byte_tokens[i], byte_tokens[i+1])   
-            pair_counts[pair] += frequency
-    return pair_counts
-
 def _find_best_pair(pairs: Counter, vocab: Dict[int, bytes]) -> Tuple[int, int]:
     if not pairs:
         return None
     best_pair = max(pairs.keys(), key = lambda p: (pairs[p], vocab[p[0]].decode("utf-8", errors="replace"), vocab[p[1]].decode("utf-8", errors="replace")))
     return best_pair
-
-def _apply_merge(byte_tokens_frequency: Dict[tuple, int], merge_pair: Tuple[int, int], new_token_id: int) -> Dict[tuple, int]:
-    """
-    REASONING: After selecting a merge, we must update ALL words to reflect this merge.
-    This changes the representation of words and affects future pair counts.
-    """
-    new_byte_tokens_frequency = {}
-    # For each word, apply the merge and update the dictionary
-    for byte_token, frequency in byte_tokens_frequency.items():
-        new_byte_token = _merge_word(byte_token, merge_pair, new_token_id)
-        new_byte_tokens_frequency[new_byte_token] = frequency
-    return new_byte_tokens_frequency
 
 def _merge_word(token_bytes: tuple[int, ...], merge_pair: Tuple[int, int], new_token_id: int) -> tuple[int, ...]:
     # Scan through word_bytes, find merge_pair, replace with new_token_id
@@ -149,6 +129,35 @@ def _merge_word(token_bytes: tuple[int, ...], merge_pair: Tuple[int, int], new_t
             merged_word.append(token_bytes[i])
             i += 1
     return tuple(merged_word)
+
+def _remove_word_from_idx(index_dict: Dict[Tuple, set], pair_counts: Counter, old_token_to_bytes: Tuple[int, ...], frequency: int, idx: int):
+    for i in range(len(old_token_to_bytes) - 1):
+        pair = (old_token_to_bytes[i], old_token_to_bytes[i + 1])
+        pair_counts[pair] -= frequency
+        index_dict[pair].discard(idx)
+        if pair_counts[pair] <= 0:
+            del pair_counts[pair]
+            if pair in index_dict:
+                del index_dict[pair]
+
+def _add_word_to_idx(index_dict: Dict[Tuple, set], pair_counts: Counter, new_token_to_bytes: Tuple[int, ...], frequency: int, idx: int):
+    for i in range(len(new_token_to_bytes) - 1):
+        pair = (new_token_to_bytes[i], new_token_to_bytes[i + 1])
+        pair_counts[pair] += frequency
+        index_dict[pair].add(idx)
+
+
+def _apply_merge_with_idx(token_to_bytes_frequency_list: List[Tuple], index_dict: Dict[Tuple, set], pair_counts: Counter, best_pair: Tuple[int, int], new_token_id: int):
+    affected_idxs = list(index_dict[best_pair])
+    for idx in affected_idxs:
+        old_token_to_bytes, freq = token_to_bytes_frequency_list[idx]
+        _remove_word_from_idx(index_dict, pair_counts, old_token_to_bytes, freq, idx)
+        new_token_to_bytes = _merge_word(old_token_to_bytes, best_pair, new_token_id)
+        token_to_bytes_frequency_list[idx] = (new_token_to_bytes, freq)
+        _add_word_to_idx(index_dict, pair_counts, new_token_to_bytes, freq, idx)
+
+
+
 
 # REASONING:
 # _find_best_pair function aims to select the most frequent byte pair for merging.
@@ -195,20 +204,21 @@ def _train_bpe(
         vocab[next_id] = special_tokens[i].encode()
         next_id += 1
     tokens_frequency = _parallel_pretokenize(input_path, special_tokens)
-    byte_tokens_frequency = { 
-        tuple(token_str.encode()): token_fq
-        for token_str, token_fq in tokens_frequency.items()
-    }
+    token_to_bytes_frequency_list = [(tuple(token_str.encode()), token_fq) for token_str, token_fq in tokens_frequency.items()]
     target_merge = vocab_size - len(vocab)
     merge = []
+    index_dict = defaultdict(set)
+    pair_counts = Counter()
+    for token_to_bytes_index, (token_to_bytes, freq) in enumerate(token_to_bytes_frequency_list):
+        for i in range(len(token_to_bytes) - 1):
+            pair = (token_to_bytes[i], token_to_bytes[i + 1])
+            pair_counts[pair] += freq
+            index_dict[pair].add(token_to_bytes_index)
     for i in range(target_merge):
-        pair_counts = _count_pairs(byte_tokens_frequency)
-        if not pair_counts:
-            break
         best_pair = _find_best_pair(pair_counts, vocab)
         merge.append((vocab[best_pair[0]], vocab[best_pair[1]]))
         vocab[next_id] = vocab[best_pair[0]] + vocab[best_pair[1]]
-        byte_tokens_frequency = _apply_merge(byte_tokens_frequency, best_pair, next_id)
+        _apply_merge_with_idx(token_to_bytes_frequency_list, index_dict, pair_counts, best_pair, next_id)
         next_id += 1
     return vocab, merge
 
