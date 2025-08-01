@@ -8,15 +8,19 @@ class Tokenizer:
         self.vocab = vocab
         self.merge = merge
         self.special_tokens = special_tokens if special_tokens is not None else []
-        escaped_special_tokens = [re.escape(special_token) for special_token in special_tokens]
+        self.special_tokens.sort(key = len, reverse = True)
+        escaped_special_tokens = [re.escape(special_token) for special_token in self.special_tokens]
         if escaped_special_tokens:
-            special_token_pattern = '|'.join(escaped_special_tokens)
-            self.combined_split_pattern = re.compile(f'({special_token_pattern} | {PAT})')
+            self.special_token_pattern = '|'.join(escaped_special_tokens)
+        else:
+            self.special_token_pattern = None
+        self.combined_split_pattern = re.compile(PAT, re.UNICODE)
+
         self.next_id = len(vocab)
         self.vocab_reverse = {}
         for key, val in self.vocab.items():
             self.vocab_reverse[val] = key
-        for special_token in special_tokens:
+        for special_token in self.special_tokens:
             encoded_special_token = special_token.encode()
             if encoded_special_token not in self.vocab_reverse:
                 self.vocab[self.next_id] = encoded_special_token
@@ -40,20 +44,35 @@ class Tokenizer:
     """
     
     def encode(self, text: str) -> List[int]:
-        text_segments = re.split(self.combined_split_pattern, text)
         encoded_text = []
-        for segment in text_segments:
-            if segment == None:
-                continue
-            if segment in self.special_tokens:
-                encoded_text.append(self.vocab_reverse[segment.encode()])
-            else:
-                encoded_text.extend(self.encode_word(segment))
+        if self.special_tokens:
+            text_segments = re.split(f'({self.special_token_pattern})', text)
+            for segment in text_segments:
+                if not segment:
+                    continue
+                if segment in self.special_tokens:
+                    encoded_text.append(self.vocab_reverse[segment.encode()])
+                else:
+                    split_segments = re.findall(self.combined_split_pattern, segment)
+                    for split_segment in split_segments:
+                        if split_segment:
+                            encoded_text.extend(self.encode_word(split_segment))
+        else:
+            text_segments = re.findall(self.combined_split_pattern, text)
+            for segment in text_segments:
+                if segment:  
+                    encoded_text.extend(self.encode_word(segment))
         return encoded_text
-
+    
 
     def encode_word(self, word: str) -> List[int]:
-        token = list(word.encode())
+        word_bytes = word.encode()
+        token = []
+        if word_bytes in self.vocab_reverse:
+            token = [self.vocab_reverse[word_bytes]]
+        else:
+            for byte in word_bytes:
+                token.append(self.vocab_reverse[bytes([byte])])
         for merge_left, merge_right in self.merge:
             token = self.apply_merge_to_token(token, merge_left, merge_right)
         return token
