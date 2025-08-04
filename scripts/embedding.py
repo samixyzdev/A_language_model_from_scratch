@@ -10,7 +10,7 @@ class Embedding(nn.Module):
         self.device = device
         self.dtype = dtype
         self.weight = nn.Parameter(torch.empty((num_embeddings, embedding_dim), device = device, dtype = dtype))
-        init.xavier_uniform_(self.weight)
+        init.trunc_normal_(self.weight, 0, 1, -3, 3)
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         return self.weight[token_ids]
