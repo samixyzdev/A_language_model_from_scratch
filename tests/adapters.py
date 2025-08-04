@@ -1,6 +1,7 @@
 from __future__ import annotations
 from scripts.train_bpe import _train_bpe
 from scripts.tokenizer import Tokenizer
+from scripts.embedding import Embedding
 import os
 from typing import IO, Any, BinaryIO
 from collections.abc import Iterable
@@ -52,8 +53,10 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
-
-    raise NotImplementedError
+    test_embedding = Embedding(vocab_size, d_model)
+    state_dict = {'weight': weights}
+    test_embedding.load_state_dict(state_dict)
+    return test_embedding.forward(token_ids)
 
 
 def run_swiglu(
