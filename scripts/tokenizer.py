@@ -102,6 +102,3 @@ class Tokenizer:
             ids_to_bytes.append(self.vocab[id])
         full_seq = b"".join(ids_to_bytes)
         return full_seq.decode(errors = "replace")
-
-            
-

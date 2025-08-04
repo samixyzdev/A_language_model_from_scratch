@@ -2,6 +2,7 @@ from __future__ import annotations
 from scripts.train_bpe import _train_bpe
 from scripts.tokenizer import Tokenizer
 from scripts.embedding import Embedding
+from scripts.linear import Linear
 import os
 from typing import IO, Any, BinaryIO
 from collections.abc import Iterable
@@ -32,7 +33,10 @@ def run_linear(
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
 
-    raise NotImplementedError
+    test_linear = Linear(d_in, d_out)
+    state_dict = {'weight': weights.T}
+    test_linear.load_state_dict(state_dict)
+    return test_linear.forward(in_features)
 
 
 def run_embedding(
@@ -292,7 +296,7 @@ def run_transformer_lm(
     weights: dict[str, Tensor],
     in_indices: Int[Tensor, " batch_size sequence_length"],
 ) -> Float[Tensor, " batch_size sequence_length vocab_size"]:
-    """Given the weights of a Transformer language model and input indices,
+    r"""Given the weights of a Transformer language model and input indices,
     return the output of running a forward pass on the input indices.
 
     This function should use RoPE.

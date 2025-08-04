@@ -258,3 +258,4 @@ def _load_bpe_train_result(vocab_path:str, merge_path: str) -> Tuple[Dict[int, b
 
     [chars]: An optional argument. If provided, it specifies the set of characters to be removed from the beginning and end of the string. If chars is not provided, strip() removes all types of whitespace characters by default.
     """
+    
