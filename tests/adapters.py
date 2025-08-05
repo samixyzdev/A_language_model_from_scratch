@@ -3,6 +3,8 @@ from scripts.train_bpe import _train_bpe
 from scripts.tokenizer import Tokenizer
 from scripts.embedding import Embedding
 from scripts.linear import Linear
+from scripts.rmsnorm import RMSNorm
+from scripts.swiglu import SwiGLU
 import os
 from typing import IO, Any, BinaryIO
 from collections.abc import Iterable
@@ -92,8 +94,10 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
-
+    test_swiglu = SwiGLU(d_model, d_ff)
+    state_dict = {'w1': w1_weight, 'w2': w2_weight, 'w3': w3_weight}
+    test_swiglu.load_state_dict(state_dict)
+    return (test_swiglu.feed_forward(in_features))
 
 def run_scaled_dot_product_attention(
     Q: Float[Tensor, " ... queries d_k"],
@@ -387,7 +391,10 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    test_rms = RMSNorm(d_model, eps)
+    state_dict = {'weight': weights}
+    test_rms.load_state_dict(state_dict)
+    return test_rms.forward(in_features)
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
