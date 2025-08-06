@@ -5,6 +5,7 @@ from scripts.embedding import Embedding
 from scripts.linear import Linear
 from scripts.rmsnorm import RMSNorm
 from scripts.swiglu import SwiGLU
+from scripts.rope import RotaryPositionalEmbedding
 import os
 from typing import IO, Any, BinaryIO
 from collections.abc import Iterable
@@ -213,7 +214,8 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    test_rope = RotaryPositionalEmbedding(theta, d_k, max_seq_len)
+    return test_rope.forward(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
