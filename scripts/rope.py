@@ -22,8 +22,8 @@ class RotaryPositionalEmbedding(nn.Module):
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         original_shape = x.shape
         #*batch_dim, seq_len, d_k =original_shape
-        cos = self.cos_vals[token_positions]
-        sin = self.sin_vals[token_positions]
+        cos = self.cos_vals[token_positions].unsqueeze(-3)
+        sin = self.sin_vals[token_positions].unsqueeze(-3)
         #x_pairs = x.view(*batch_dim,seq_len, d_k // 2, 2)
         x_pairs = rearrange(x, '... seq_len (d_pair pair) -> ... seq_len d_pair pair', pair = 2)
         x1 = x_pairs[..., 0]
@@ -32,5 +32,8 @@ class RotaryPositionalEmbedding(nn.Module):
         rotated_x2 = x1 * sin + x2 * cos
         #rotated_pairs = torch.stack([rotated_x1, rotated_x2], dim = -1)
         #rotated_x = rotated_pairs.view(*original_shape)
-        rotated_x = rearrange([rotated_x1, rotated_x2], 'pair ... seq_len d_pair -> ... seq_len (d_pair pair)')
-        return rotated_x
+        #rotated_x = rearrange([rotated_x1, rotated_x2], 'pair ... seq_len d_pair -> ... seq_len (d_pair pair)')
+        result = torch.zeros_like(x)
+        result[..., 0::2] = rotated_x1
+        result[..., 1::2] = rotated_x2
+        return result
